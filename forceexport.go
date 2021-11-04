@@ -44,8 +44,7 @@ func CreateFuncForCodePtr(outFuncPtr interface{}, codePtr uintptr) {
 	// work because it gives the code pointer rather than the function value
 	// pointer. The function value is a struct that starts with its code
 	// pointer, so we can swap out the code pointer with our desired value.
-	funcValuePtr := reflect.ValueOf(newFuncVal).FieldByName("ptr").Pointer()
-	funcPtr := (*Func)(unsafe.Pointer(funcValuePtr))
+	funcPtr := (*Func)(unsafe.Pointer(reflect.ValueOf(newFuncVal).FieldByName("ptr").Pointer()))
 	funcPtr.codePtr = codePtr
 	outFuncVal.Set(newFuncVal)
 }
@@ -84,23 +83,23 @@ type (
 		filetab      []uint32
 		findfunctab  uintptr
 		minpc, maxpc uintptr
-	
+
 		text, etext           uintptr
 		noptrdata, enoptrdata uintptr
 		data, edata           uintptr
 		bss, ebss             uintptr
 		noptrbss, enoptrbss   uintptr
 		end, gcdata, gcbss    uintptr
-	
+
 		// Original type was []*_type
 		typelinks []interface{}
-	
+
 		modulename string
 		// Original type was []modulehash
 		modulehashes []interface{}
-	
+
 		gcdatamask, gcbssmask Bitvector
-	
+
 		next *oldModuleWrapper
 	}
 
@@ -114,7 +113,7 @@ type (
 		ftab         []Functab
 		findfunctab  uintptr
 		minpc, maxpc uintptr
-	
+
 		text, etext           uintptr
 		noptrdata, enoptrdata uintptr
 		data, edata           uintptr
@@ -122,27 +121,27 @@ type (
 		noptrbss, enoptrbss   uintptr
 		end, gcdata, gcbss    uintptr
 		types, etypes         uintptr
-	
+
 		textsectmap []byte
 		typelinks   []int32 // offsets from types
 		itablinks   []byte
-	
+
 		ptab []byte
-	
+
 		pluginpath string
 		pkghashes  []byte
-	
+
 		modulename   string
 		modulehashes []byte
-	
+
 		hasmain uint8 // 1 if module contains the main function, 0 otherwise
-	
+
 		gcdatamask, gcbssmask bitvector
-	
+
 		typemap map[int32]*byte // offset to *_rtype in previous module
-	
+
 		bad bool // module failed to load and should be ignored
-	
+
 		next *newModuleWrapper
 	}
 )
@@ -156,7 +155,7 @@ func (me *newModuleWrapper) GetFunc(ftab Functab) *runtime.Func {
 	//return (*runtime.Func)(unsafe.Pointer(&(*pcIntable)[ftab.funcoff]))
 }
 
-func (me *newModuleWrapper) GetNext() moduleWrapper{
+func (me *newModuleWrapper) GetNext() moduleWrapper {
 	if me.next != nil {
 		return me.next
 	}
@@ -208,7 +207,7 @@ func FindFuncWithName(name string) (uintptr, error) {
 		ftabs := module.GetFtab()
 		l := len(ftabs)
 		for i, ftab := range ftabs {
-			if i == l - 1 {
+			if i == l-1 {
 				break
 			}
 			f := module.GetFunc(ftab)
@@ -234,7 +233,7 @@ func FindFuncWithName(name string) (uintptr, error) {
 var Firstmoduledata Moduledata
 
 type Moduledata struct {
-	pcHeader     *pcHeader
+	pcHeader *pcHeader
 }
 
 type Functab struct {
