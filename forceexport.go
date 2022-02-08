@@ -66,6 +66,22 @@ type (
 		pclnOffset     uintptr // offset to the pclntab variable from pcHeader
 	}
 
+	// pcHeader holds data used by the pclntab lookups.
+	pcHeader1_18 struct {
+		magic          uint32  // 0xFFFFFFF0
+		pad1, pad2     uint8   // 0,0
+		minLC          uint8   // min instruction size
+		ptrSize        uint8   // size of a ptr in bytes
+		nfunc          int     // number of functions in the module
+		nfiles         uint    // number of entries in the file tab
+		textStart      uintptr // base for function entry PC offsets in this module, equal to moduledata.text
+		funcnameOffset uintptr // offset to the funcnametab variable from pcHeader
+		cuOffset       uintptr // offset to the cutab variable from pcHeader
+		filetabOffset  uintptr // offset to the filetab variable from pcHeader
+		pctabOffset    uintptr // offset to the pctab variable from pcHeader
+		pclnOffset     uintptr // offset to the pclntab variable from pcHeader
+	}
+
 	bitvector struct {
 		n        int32 // # of bits
 		bytedata *uint8
@@ -144,6 +160,50 @@ type (
 
 		next *newModuleWrapper
 	}
+
+	newModuleWrapper1_18 struct {
+		pcHeader     *pcHeader1_18
+		funcnametab  []byte
+		cutab        []uint32
+		filetab      []byte
+		pctab        []byte
+		pclntable    []byte
+		ftab         []Functab
+		findfunctab  uintptr
+		minpc, maxpc uintptr
+
+		text, etext           uintptr
+		noptrdata, enoptrdata uintptr
+		data, edata           uintptr
+		bss, ebss             uintptr
+		noptrbss, enoptrbss   uintptr
+		end, gcdata, gcbss    uintptr
+		types, etypes         uintptr
+		rodata                uintptr
+		gofunc                uintptr // go.func.*
+
+		textsectmap []byte
+		typelinks   []int32 // offsets from types
+		itablinks   []byte
+
+		ptab []byte
+
+		pluginpath string
+		pkghashes  []byte
+
+		modulename   string
+		modulehashes []byte
+
+		hasmain uint8 // 1 if module contains the main function, 0 otherwise
+
+		gcdatamask, gcbssmask bitvector
+
+		typemap map[int32]*byte // offset to *_rtype in previous module
+
+		bad bool // module failed to load and should be ignored
+
+		next *newModuleWrapper1_18
+	}
 )
 
 func (me *newModuleWrapper) GetFtab() []Functab {
@@ -152,6 +212,23 @@ func (me *newModuleWrapper) GetFtab() []Functab {
 
 func (me *newModuleWrapper) GetFunc(ftab Functab) *runtime.Func {
 	return (*runtime.Func)(unsafe.Pointer(uintptr(unsafe.Pointer(me.pcHeader)) + uintptr(me.pcHeader.pclnOffset) + ftab.funcoff))
+	//return (*runtime.Func)(unsafe.Pointer(&(*pcIntable)[ftab.funcoff]))
+}
+
+func (me *newModuleWrapper1_18) GetNext() moduleWrapper {
+	if me.next != nil {
+		return me.next
+	}
+	return nil
+}
+
+func (me *newModuleWrapper1_18) GetFtab() []Functab {
+	return me.ftab
+}
+
+func (me *newModuleWrapper1_18) GetFunc(ftab Functab) *runtime.Func {
+	ftab1_18 := (*Functab1_18)(unsafe.Pointer(&ftab))
+	return (*runtime.Func)(unsafe.Pointer(uintptr(unsafe.Pointer(me.pcHeader)) + uintptr(me.pcHeader.pclnOffset) + uintptr(ftab1_18.funcoff)))
 	//return (*runtime.Func)(unsafe.Pointer(&(*pcIntable)[ftab.funcoff]))
 }
 
@@ -185,9 +262,13 @@ func (me *oldModuleWrapper) GetNext() moduleWrapper {
 func FindFuncWithName(name string) (uintptr, error) {
 	var module moduleWrapper
 	var new *newModuleWrapper
+	var new1_18 *newModuleWrapper1_18
 	var old *oldModuleWrapper
 
-	if Firstmoduledata.pcHeader.magic == 0xFFFFFFFA { // go 1.16+
+	if Firstmoduledata.pcHeader.magic == 0xFFFFFFF0 { // go 1.18+
+		new1_18 = (*newModuleWrapper1_18)(unsafe.Pointer(&Firstmoduledata))
+		module = new1_18
+	} else if Firstmoduledata.pcHeader.magic == 0xFFFFFFFA { // go 1.16+
 		new = (*newModuleWrapper)(unsafe.Pointer(&Firstmoduledata))
 		// offset := uintptr(unsafe.Pointer(new)) - uintptr(unsafe.Pointer(new.pcHeader))
 		// println(offset)
@@ -236,9 +317,18 @@ type Moduledata struct {
 	pcHeader *pcHeader
 }
 
+type Moduledata1_18 struct {
+	pcHeader *pcHeader1_18
+}
+
 type Functab struct {
 	entry   uintptr
 	funcoff uintptr
+}
+
+type Functab1_18 struct {
+	entry   uint32
+	funcoff uint32
 }
 
 type Bitvector struct {
