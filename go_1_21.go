@@ -1,5 +1,5 @@
-//go:build go1.18 && !go1.21
-// +build go1.18,!go1.21
+//go:build go1.21
+// +build go1.21
 
 package forceexport
 
@@ -12,7 +12,7 @@ type (
 
 	// pcHeader holds data used by the pclntab lookups.
 	pcHeader struct {
-		magic          uint32  // 0xFFFFFFF0
+		magic          uint32  // 0xFFFFFFF1
 		pad1, pad2     uint8   // 0,0
 		minLC          uint8   // min instruction size
 		ptrSize        uint8   // size of a ptr in bytes
@@ -59,6 +59,7 @@ type moduledata struct {
 	data, edata           uintptr
 	bss, ebss             uintptr
 	noptrbss, enoptrbss   uintptr
+	covctrs, ecovctrs     uintptr
 	end, gcdata, gcbss    uintptr
 	types, etypes         uintptr
 	rodata                uintptr
@@ -72,6 +73,10 @@ type moduledata struct {
 
 	pluginpath string
 	pkghashes  []modulehash
+
+	// This slice records the initializing tasks that need to be
+	// done to start up the program. It is built by the linker.
+	inittasks []uintptr //[]*initTask
 
 	modulename   string
 	modulehashes []modulehash
