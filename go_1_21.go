@@ -105,18 +105,6 @@ type textsect struct {
 	baseaddr uintptr // relocated section address
 }
 
-// layout of Itab known to compilers
-// allocated in non-garbage-collected memory
-// Needs to be in sync with
-// ../cmd/compile/internal/reflectdata/reflect.go:/^func.WriteTabs.
-type itab struct {
-	inter *interfacetype
-	_type *_type
-	hash  uint32 // copy of _type.hash. Used for type switches.
-	_     [4]byte
-	fun   [1]uintptr // variable sized. fun[0]==0 means _type does not implement inter.
-}
-
 type interfacetype struct {
 	typ     _type
 	pkgpath name
@@ -213,11 +201,3 @@ func (me *newModuleWrapper) GetFunc(ftab functab) *runtime.Func {
 	return (*runtime.Func)(unsafe.Pointer(uintptr(unsafe.Pointer(me.pcHeader)) + uintptr(me.pcHeader.pclnOffset) + uintptr(ftab1_18.funcoff)))
 	//return (*runtime.Func)(unsafe.Pointer(&(*pcIntable)[ftab.funcoff]))
 }
-
-func getModuleWrapper() moduleWrapper {
-	new1_18 := (*newModuleWrapper)(unsafe.Pointer(&Firstmoduledata))
-	return new1_18
-}
-
-//go:linkname Firstmoduledata runtime.firstmoduledata
-var Firstmoduledata Moduledata

@@ -61,6 +61,9 @@ type ()
 // catastrophically).
 func FindFuncWithName(name string) (uintptr, error) {
 	module := getModuleWrapper()
+	if module == nil {
+		return 0, fmt.Errorf("moduledata not found!")
+	}
 
 	for {
 		ftabs := module.GetFtab()
@@ -70,8 +73,11 @@ func FindFuncWithName(name string) (uintptr, error) {
 				break
 			}
 			f := module.GetFunc(ftab)
+			if f == nil {
+				continue
+			}
 			n := f.Name()
-			//println(n)
+			//fmt.Println(n)
 			// if n == `main.init.0` || n == `main.main` {
 			// 	time.Now()
 			// }

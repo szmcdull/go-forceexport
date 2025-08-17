@@ -1,25 +1,69 @@
 package forceexport
 
 import (
+	"context"
+	"fmt"
 	"reflect"
 	"testing"
+	"time"
 )
 
+func init() {
+	fmt.Println(time.Now())
+	c, cancel := context.WithCancel(context.Background())
+	fmt.Println(c, cancel)
+}
+
+// This test fails when not debugging, even though checklinkname=0.
+// This may be due to the optimization done by the Go compiler (withContext inlined?).
+func TestContext(t *testing.T) {
+	c, cancel := context.WithCancel(context.Background())
+	cancel()
+	c.Done()
+
+	var v func(int) int
+	err := GetFunc(&v, `context.withCancel`)
+	if err != nil {
+		t.Error("Expected nil error.")
+	}
+	if v == nil {
+		t.Error("Expected non-nil function.")
+	}
+}
+
 func TestTimeNow(t *testing.T) {
+	// Try the new time.runtimeNow first (3 return values) - based on call stack
+	var runtimeNowFunc func() (int64, int32, int64)
+	err := GetFunc(&runtimeNowFunc, "time.runtimeNow")
+	if err == nil && runtimeNowFunc != nil {
+		sec, nsec, mono := runtimeNowFunc()
+		if sec == 0 || nsec == 0 {
+			t.Error("Expected nonzero result from time.runtimeNow().")
+		}
+		t.Logf("time.runtimeNow() returned sec=%d, nsec=%d, mono=%d", sec, nsec, mono)
+		return
+	}
+
+	// Fallback to assembly time.now (2 return values)
 	var timeNowFunc func() (int64, int32)
-	GetFunc(&timeNowFunc, "time.now")
-	if timeNowFunc == nil {
-		GetFunc(&timeNowFunc, "runtime.now")
+	err = GetFunc(&timeNowFunc, "time.now")
+	if err == nil && timeNowFunc != nil {
+		sec, nsec := timeNowFunc()
+		if sec == 0 || nsec == 0 {
+			t.Error("Expected nonzero result from time.now().")
+		}
+		t.Logf("time.now() returned sec=%d, nsec=%d", sec, nsec)
+		return
 	}
-	sec, nsec := timeNowFunc()
-	if sec == 0 || nsec == 0 {
-		t.Error("Expected nonzero result from time.now().")
-	}
+
+	// If both fail, report the failure
+	t.Fatalf("Failed to get both time.runtimeNow and time.now: %v", err)
 }
 
 // Note that we need to disable inlining here, or else the function won't be
 // compiled into the binary. We also need to call it from the test so that the
 // compiler doesn't remove it because it's unused.
+//
 //go:noinline
 func addOne(x int) int {
 	return x + 1
