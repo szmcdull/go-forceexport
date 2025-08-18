@@ -6,6 +6,7 @@ package forceexport
 import (
 	"reflect"
 	"runtime"
+	"sync"
 	"unsafe"
 )
 
@@ -56,6 +57,7 @@ func getModuleWrapper() moduleWrapper {
 
 var Firstmoduledata uintptr
 var FirstmoduledataAddrFromLinkname uintptr
+var firstModuleDataOnce sync.Once
 
 // scan memory for runtime.firstmoduledata
 func findFirstModuleData() uintptr {
@@ -70,34 +72,38 @@ func findFirstModuleData() uintptr {
 		return FirstmoduledataAddrFromLinkname
 	}
 
-	// Strategy 1: Locate nearby data structures using known runtime function addresses
-	pc := reflect.ValueOf(runtime.GC).Pointer()
+	firstModuleDataOnce.Do(func() {
 
-	// moduledata is usually in the data segment near the code segment
-	// Search range: start from the current PC address, search forward and backward
-	baseAddr := pc & ^uintptr(0xFFFF) // Page aligned
+		// Strategy 1: Locate nearby data structures using known runtime function addresses
+		pc := reflect.ValueOf(runtime.GC).Pointer()
 
-	// Search for moduledata features within a reasonable range
-	// Use a more conservative search range and step size
-	for offset := uintptr(0); offset < 0x2000000; offset += uintptr(unsafe.Sizeof(uintptr(0))) { // Search 32MB range, step by pointer size
-		// Search forward
-		if addr := baseAddr + offset; isValidModuleData(addr) {
-			Firstmoduledata = addr
-			// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
-			return addr
-		}
+		// moduledata is usually in the data segment near the code segment
+		// Search range: start from the current PC address, search forward and backward
+		baseAddr := pc & ^uintptr(0xFFFF) // Page aligned
 
-		// Search backward
-		if baseAddr > offset && baseAddr-offset > 0x400000 { // Ensure not to search too low addresses
-			if addr := baseAddr - offset; isValidModuleData(addr) {
+		// Search for moduledata features within a reasonable range
+		// Use a more conservative search range and step size
+		for offset := uintptr(0); offset < 0x2000000; offset += uintptr(unsafe.Sizeof(uintptr(0))) { // Search 32MB range, step by pointer size
+			// Search forward
+			if addr := baseAddr + offset; isValidModuleData(addr) {
 				Firstmoduledata = addr
 				// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
-				return addr
+				return
+			}
+
+			// Search backward
+			if baseAddr > offset && baseAddr-offset > 0x400000 { // Ensure not to search too low addresses
+				if addr := baseAddr - offset; isValidModuleData(addr) {
+					Firstmoduledata = addr
+					// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
+					return
+				}
 			}
 		}
-	}
 
-	return 0
+	})
+
+	return Firstmoduledata
 }
 
 // Check whether the given address is likely a moduledata structure
