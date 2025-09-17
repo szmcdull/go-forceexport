@@ -58,6 +58,7 @@ func getModuleWrapper() moduleWrapper {
 var Firstmoduledata uintptr
 var FirstmoduledataAddrFromLinkname uintptr
 var firstModuleDataOnce sync.Once
+var codeAddr uintptr
 
 // scan memory for runtime.firstmoduledata
 func findFirstModuleData() uintptr {
@@ -79,21 +80,21 @@ func findFirstModuleData() uintptr {
 
 		// moduledata is usually in the data segment near the code segment
 		// Search range: start from the current PC address, search forward and backward
-		baseAddr := pc & ^uintptr(0xFFFF) // Page aligned
+		codeAddr = pc & ^uintptr(0xFFF) // Page aligned
 
 		// Search for moduledata features within a reasonable range
 		// Use a more conservative search range and step size
 		for offset := uintptr(0); offset < 0x2000000; offset += uintptr(unsafe.Sizeof(uintptr(0))) { // Search 32MB range, step by pointer size
 			// Search forward
-			if addr := baseAddr + offset; isValidModuleData(addr) {
+			if addr := codeAddr + offset; isValidModuleData(addr) {
 				Firstmoduledata = addr
 				// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
 				return
 			}
 
 			// Search backward
-			if baseAddr > offset && baseAddr-offset > 0x400000 { // Ensure not to search too low addresses
-				if addr := baseAddr - offset; isValidModuleData(addr) {
+			if codeAddr > offset && codeAddr-offset > 0x400000 { // Ensure not to search too low addresses
+				if addr := codeAddr - offset; isValidModuleData(addr) {
 					Firstmoduledata = addr
 					// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
 					return
@@ -104,6 +105,14 @@ func findFirstModuleData() uintptr {
 	})
 
 	return Firstmoduledata
+}
+
+func isInCodeSection(addr uintptr) bool {
+	offset := int(addr) - int(codeAddr)
+	if offset > 0x40000000 || offset < -200000 {
+		return false
+	}
+	return true
 }
 
 // Check whether the given address is likely a moduledata structure
@@ -119,21 +128,25 @@ func isValidModuleData(addr uintptr) bool {
 	}
 
 	// Check whether the basic part of the moduledata structure can be safely read
-	const moduleDataMinSize = 64 // The first 64 bytes of moduledata contain key fields
-	if !IsAddrReadable(addr, int(unsafe.Sizeof(moduledata{}))) {
-		return false
-	}
+	// const moduleDataMinSize = 64 // The first 64 bytes of moduledata contain key fields
+	// if !IsAddrReadable(addr, int(unsafe.Sizeof(moduledata{}))) {
+	// 	return false
+	// }
 
 	// Safely check the pcHeader pointer - pcHeader is usually the second field of moduledata
 	pcHeaderPtrAddr := addr + 0 // Assume pcHeader is at offset 0
-	if !IsAddrReadable(pcHeaderPtrAddr, 8) {
-		return false
-	}
+	// if !IsAddrReadable(pcHeaderPtrAddr, 8) {
+	// 	return false
+	// }
 
 	// Try to safely read the pcHeader pointer
 	IsAddrReadable(pcHeaderPtrAddr, int(unsafe.Sizeof(pcHeader{})))
 	pcHeaderAddr, ok := safeReadUintptr(pcHeaderPtrAddr)
 	if !ok {
+		return false
+	}
+
+	if !isInCodeSection(pcHeaderAddr) {
 		return false
 	}
 
@@ -148,12 +161,13 @@ func isValidModuleData(addr uintptr) bool {
 	}
 
 	// Try to safely read the magic value
-	magic, ok := safeReadUint32(pcHeaderAddr)
+	magic, ok := safeReadUintptr(pcHeaderAddr)
 	if !ok {
 		return false
 	}
 
-	if magic != 0xFFFFFFF1 && magic != 0xFFFFFFF0 {
+	magicAndPads := magic & 0xffffffffffff
+	if magicAndPads != 0xFFFFFFF1 && magicAndPads != 0xFFFFFFF0 {
 		return false
 	}
 
@@ -164,6 +178,11 @@ func isValidModuleData(addr uintptr) bool {
 	}
 
 	if nfunc == 0 || nfunc > 100000 { // Reasonable function count range
+		return false
+	}
+
+	moduleData := (*moduledata)(unsafe.Pointer(addr))
+	if moduleData.hasmain != 1 {
 		return false
 	}
 
