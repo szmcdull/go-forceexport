@@ -57,8 +57,8 @@ Due to the restriction to `go:linkname` in recent Go versions, you have to compi
 make use of it.
 
 If you are not able to do so (eg. you may be developing another library that is to be used by others),
-forceexport will search around the code section for the `moduledate` at runtime,
-instead of linking to it at compile time. In my test, this search is fairly fast in Linux, but will take 
+forceexport is capable to search around the code section for the `firstmoduledata` at runtime,
+instead of linking to it statically. In my test, this search is fairly fast in Linux, but will take 
 about 3 seconds in Windows (MacOS is not tested, as I don't have a Mac).
 
 
