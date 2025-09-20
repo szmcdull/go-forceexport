@@ -50,6 +50,18 @@ GetFunc(&getFunc, "github.com/alangpierce/go-forceexport.GetFunc")
 - 1.16.13
 - 1.14.15
 
+### Note for Go 1.23 and above
+
+Due to the restriction to `go:linkname` in recent Go versions, you have to compile with
+`-tags=checklinkname_off -ldflags=-checklinkname=0` to enable `go:linkname` and enable forceexport to 
+make use of it.
+
+If you are not able to do so (eg. you may be developing another library that is to be used by others),
+forceexport will search around the code section for the `moduledate` at runtime,
+instead of linking to it at compile time. In my test, this search is fairly fast in Linux, but will take 
+about 3 seconds in Windows (MacOS is not tested, as I don't have a Mac).
+
+
 ## Use cases and pitfalls
 
 This library is most useful for development and hack projects. For example, you
@@ -78,7 +90,7 @@ the foot:
 
 ## How it works
 
-The [code](/forceexport.go) is pretty short, so you could just read it, but
+~~The [code](/forceexport.go) is pretty short~~, so you could just read it, but
 here's a friendlier explanation:
 
 The code uses the `go:linkname` compiler directive to get access to the
