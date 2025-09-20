@@ -42,6 +42,9 @@ GetFunc(&getFunc, "github.com/alangpierce/go-forceexport.GetFunc")
 ```
 
 ## The following Go versions are tested:
+- 1.25
+- 1.23
+- 1.21
 - 1.18 beta2
 - 1.17.5
 - 1.16.13
