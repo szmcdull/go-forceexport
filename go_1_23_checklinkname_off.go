@@ -1,5 +1,5 @@
-//go:build go1.23 && !checklinkname_off
-// +build go1.23,!checklinkname_off
+//go:build go1.23 && !go1.26 && !checklinkname_off
+// +build go1.23,!go1.26,!checklinkname_off
 
 package forceexport
 

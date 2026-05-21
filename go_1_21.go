@@ -1,5 +1,5 @@
-//go:build go1.21
-// +build go1.21
+//go:build go1.21 && !go1.26
+// +build go1.21,!go1.26
 
 package forceexport
 
