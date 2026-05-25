@@ -281,6 +281,7 @@ func isValidModuleData(addr uintptr) bool {
 	return true
 }
 
+//go:nocheckptr
 func safeReadUintptr(addr uintptr) (value uintptr, ok bool) {
 	defer func() {
 		if recover() != nil {
@@ -298,6 +299,7 @@ func safeReadUintptr(addr uintptr) (value uintptr, ok bool) {
 	return
 }
 
+//go:nocheckptr
 func safeReadUint32(addr uintptr) (value uint32, ok bool) {
 	defer func() {
 		if recover() != nil {
