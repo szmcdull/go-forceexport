@@ -74,34 +74,9 @@ func findFirstModuleData() uintptr {
 	}
 
 	firstModuleDataOnce.Do(func() {
-
-		// Strategy 1: Locate nearby data structures using known runtime function addresses
 		pc := reflect.ValueOf(runtime.GC).Pointer()
-
-		// moduledata is usually in the data segment near the code segment
-		// Search range: start from the current PC address, search forward and backward
-		codeAddr = pc & ^uintptr(0xFFF) // Page aligned
-
-		// Search for moduledata features within a reasonable range
-		// Use a more conservative search range and step size
-		for offset := uintptr(0); offset < 0x2000000; offset += uintptr(unsafe.Sizeof(uintptr(0))) { // Search 32MB range, step by pointer size
-			// Search forward
-			if addr := codeAddr + offset; isValidModuleData(addr) {
-				Firstmoduledata = addr
-				// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
-				return
-			}
-
-			// Search backward
-			if codeAddr > offset && codeAddr-offset > 0x400000 { // Ensure not to search too low addresses
-				if addr := codeAddr - offset; isValidModuleData(addr) {
-					Firstmoduledata = addr
-					// fmt.Printf("Found moduledata at: %x, base addr: %x, offset=%x, FirstmoduledataFromLinkName=%x\n", addr, baseAddr, offset, FirstmoduledataAddrFromLinkname)
-					return
-				}
-			}
-		}
-
+		codeAddr = pc & ^uintptr(0xFFF)
+		Firstmoduledata = locateModuleDataWithoutLinkname(codeAddr)
 	})
 
 	return Firstmoduledata

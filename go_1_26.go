@@ -198,20 +198,7 @@ func findFirstModuleData() uintptr {
 	firstModuleDataOnce.Do(func() {
 		pc := reflect.ValueOf(runtime.GC).Pointer()
 		codeAddr = pc & ^uintptr(0xFFF)
-
-		for offset := uintptr(0); offset < 0x2000000; offset += uintptr(unsafe.Sizeof(uintptr(0))) {
-			if addr := codeAddr + offset; isValidModuleData(addr) {
-				Firstmoduledata = addr
-				return
-			}
-
-			if codeAddr > offset && codeAddr-offset > 0x400000 {
-				if addr := codeAddr - offset; isValidModuleData(addr) {
-					Firstmoduledata = addr
-					return
-				}
-			}
-		}
+		Firstmoduledata = locateModuleDataWithoutLinkname(codeAddr)
 	})
 
 	return Firstmoduledata

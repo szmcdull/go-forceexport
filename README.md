@@ -10,9 +10,12 @@ by name.
 As you might expect, this library is **unsafe** and **fragile** and probably
 shouldn't be used in production. See "Use cases and pitfalls" below.
 
-It has only been tested on Mac OS X with Go 1.6. If you find that it works or
-breaks on other platforms, feel free to submit a pull request with a fix and/or
-an update to this paragraph.
+Tested on **Linux** (Go 1.23–1.26, including Delve `-gcflags="all=-N -l"` builds)
+and on **macOS** with older Go versions. On Go 1.23+ without `checklinkname_off`:
+
+- **Linux** — maps-based scan of the executable RW segment (recommended path)
+- **macOS / Windows / other** — legacy GC-anchored scan (±32 MiB); use
+  `checklinkname_off` if that is not enough
 
 ## Installation
 
@@ -53,15 +56,91 @@ GetFunc(&getFunc, "github.com/alangpierce/go-forceexport.GetFunc")
 
 ### Note for Go 1.23 and above
 
-Due to the restriction to `go:linkname` in recent Go versions, you have to compile with
-`-tags=checklinkname_off -ldflags=-checklinkname=0` to enable `go:linkname` and enable forceexport to 
-make use of it.
+Due to the restriction to `go:linkname` in recent Go versions, you can compile with
+`-tags=checklinkname_off -ldflags=-checklinkname=0` to enable `go:linkname` and let
+forceexport link directly to `runtime.firstmoduledata` (fastest, most reliable).
 
-If you are not able to do so (eg. you may be developing another library that is to be used by others),
-forceexport is capable to search around the code section for the `firstmoduledata` at runtime,
-instead of linking to it statically. In my test, this search is fairly fast in Linux, but will take 
-about 3 seconds in Windows (MacOS is not tested, as I don't have a Mac).
+If you cannot require those flags on downstream consumers (e.g. a library used by
+others), forceexport falls back to a **runtime scan** to find `runtime.firstmoduledata`
+in memory. The scan strategy is selected by OS at compile time; see
+**Runtime moduledata discovery** below.
 
+## Runtime moduledata discovery (Go 1.23+)
+
+`GetFunc` walks `runtime.firstmoduledata` to resolve function names. On Go 1.23+ with default
+`checklinkname=1`, forceexport cannot link directly to that symbol and must locate it first.
+
+### Two paths
+
+| Path | Build flags | Behaviour |
+|------|-------------|-----------|
+| **linkname** | `-tags=checklinkname_off -ldflags=-checklinkname=0` | `go:linkname runtime.firstmoduledata` |
+| **runtime scan** | default | OS-specific; see platform table |
+
+### Platform dispatch
+
+Entry point: `locateModuleDataWithoutLinkname` (called from `go_1_23.go` / `go_1_26.go`).
+The version-specific files do **not** embed scan logic themselves.
+
+| OS | Files | Strategy |
+|----|-------|----------|
+| **Linux** | `locate_moduledata_linux.go` → `moduledata_maps_linux.go` | `/proc/self/maps` RW-segment scan |
+| **non-Linux** | `locate_moduledata_legacy.go` | scan ±32 MiB around `runtime.GC` |
+
+### Linux: `/proc/self/maps` RW-segment scan
+
+On Linux, `runtime.firstmoduledata` lives in the linker-generated **`.go.module`** section. In the
+loaded image this sits in the executable's **read-write data segment**, after `.text` / `.rodata`.
+
+Algorithm (`moduledata_maps_linux.go`):
+
+1. Take `runtime.GC` PC and find the containing **r-x** mapping in `/proc/self/maps`.
+2. Collect **rw-** mappings of the **same executable path** with start address ≥ end of that r-x map.
+3. Walk only those RW regions and return the first address that passes `isValidModuleData`.
+
+Why not a fixed window from `runtime.GC`? On large **Delve / debug** binaries
+(`-gcflags="all=-N -l"`), `.go.module` can sit **beyond any practical fixed limit**
+(e.g. >32 MiB above code). Scanning the whole RW segment avoids both missed lookups and
+slow blind scans over tens of megabytes of code/rodata.
+
+Typical virtual layout (Linux PIE):
+
+```
+[ .text r-x ] [ .rodata r-- ] [ .go.module / .data rw- ]
+   runtime.GC here              runtime.firstmoduledata here
+```
+
+### macOS: Mach-O, not ELF
+
+macOS executables use **Mach-O**, not ELF. A Go binary is usually **Mach-O 64-bit**
+(`MH_EXECUTE` or `MH_PIE`). Rough segment mapping:
+
+| Mach-O segment | Role | ELF analogue |
+|----------------|------|--------------|
+| `__TEXT` | code, read-only metadata | `.text` |
+| `__DATA_CONST` | read-only globals | `.rodata` |
+| `__DATA` | writable globals | `.data`, `.go.module`, `.noptrdata`, … |
+
+`runtime.firstmoduledata` is still in the **writable non-executable segment after code**, but
+there is **no `/proc/self/maps`**. Memory regions are queried via Mach APIs
+(`mach_vm_region`, `vm_region_recurse_64`) or dyld (`_dyld_get_image_header`, etc.).
+
+**Current status:** no Mach-O maps scanner yet. Non-Linux builds use the **legacy ±32 MiB scan**
+(`locate_moduledata_legacy.go`). If that fails, use `checklinkname_off`, or contribute a
+Mach-O RW-segment walker analogous to the Linux implementation.
+
+### Windows
+
+Not covered by the Linux maps scanner. Use `checklinkname_off` or the legacy / Windows-specific
+paths in this repo where applicable.
+
+### Troubleshooting
+
+| Error | Likely cause | Fix |
+|-------|--------------|-----|
+| `moduledata not found!` | runtime scan failed before any function lookup | Linux: should not happen on recent builds; report a bug. Other OS: try `checklinkname_off` |
+| `Invalid function name: …` | moduledata found, but symbol missing (inlining / dead-code elimination) | call a reference to keep the symbol; build with `-gcflags="all=-l"`; or use `checklinkname_off` |
+| panic in `go-cancelContext` init | same as `moduledata not found!` during `GetFunc` in `init()` | ensure forceexport version with Linux maps scan, or add `checklinkname_off` to debug build flags |
 
 ## Use cases and pitfalls
 
@@ -91,22 +170,15 @@ the foot:
 
 ## How it works
 
-~~The [code](/forceexport.go) is pretty short~~, so you could just read it, but
-here's a friendlier explanation:
+1. **Locate `runtime.firstmoduledata`**
+   - With `checklinkname_off`: direct `go:linkname` to the linker symbol.
+   - Otherwise: `locateModuleDataWithoutLinkname` (Linux maps scan or legacy GC scan).
 
-The code uses the `go:linkname` compiler directive to get access to the
-`runtime.firstmoduledata` symbol, which is an internal data structure created by
-the linker that's used by functions like `runtime.FuncForPC`. (Using
-`go:linkname` is an alternate way to access unexported functions/values, but it
-has other gotchas and can't be used dynamically.)
+2. **Walk the function table** — same idea as `runtime.FuncForPC`: iterate `moduledata` entries
+   until the requested name matches, then read the code pointer.
 
-Similar to the implementation of `runtime.FuncForPC`, the code walks the
-function definitions until it finds one with a matching name, then gets its code
-pointer.
-
-From there, it creates a function object from the code pointer by calling
-`reflect.MakeFunc` and using `unsafe.Pointer` to swap out the function object's
-code pointer with the desired one.
+3. **Build a callable `func` value** — `reflect.MakeFunc` plus `unsafe.Pointer` to swap in the
+   target code pointer.
 
 Needless to say, it's a scary hack, but it seems to work!
 
