@@ -1,5 +1,5 @@
-//go:build go1.23 && !linux
-// +build go1.23,!linux
+//go:build go1.23 && !linux && !windows
+// +build go1.23,!linux,!windows
 
 package forceexport
 
