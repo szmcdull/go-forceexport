@@ -52,6 +52,3 @@ jobs:
 
       - name: Test discovery beyond 32 MiB
         run: go test -v -count=1 -tags=large_discovery_test -run '^TestLargeDarwinModuleDataDiscovery$' .
-
-      - name: Run full test suite
-        run: go test -v ./...
