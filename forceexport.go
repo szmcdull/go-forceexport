@@ -1,6 +1,7 @@
 package forceexport
 
 import (
+	"errors"
 	"fmt"
 	"reflect"
 	"strings"
@@ -62,7 +63,7 @@ type ()
 func FindFuncWithName(name string) (uintptr, error) {
 	module := getModuleWrapper()
 	if module == nil {
-		return 0, fmt.Errorf("moduledata not found!")
+		return 0, errors.New("moduledata not found!")
 	}
 
 	for {
