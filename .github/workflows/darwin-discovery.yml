@@ -1,0 +1,57 @@
+name: Darwin moduledata discovery
+
+on:
+  push:
+    branches:
+      - dev
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  darwin:
+    name: ${{ matrix.arch }} / Go ${{ matrix.go }}
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-14
+            arch: arm64
+            go: '1.23'
+          - runner: macos-14
+            arch: arm64
+            go: '1.26'
+          - runner: macos-15-intel
+            arch: amd64
+            go: '1.23'
+          - runner: macos-15-intel
+            arch: amd64
+            go: '1.26'
+
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+
+      - name: Show environment
+        run: |
+          go version
+          uname -a
+
+      - name: Run Darwin discovery tests
+        run: go test -v -count=1 -run 'Test(FindModuleDataInMachOImage|ParseMachO64|LoadedMachOImageRanges)' .
+
+      - name: Test discovery beyond 32 MiB
+        run: go test -v -count=1 -tags=large_discovery_test -run '^TestLargeDarwinModuleDataDiscovery$' .
+
+      - name: Run full test suite
+        run: go test -v ./...

@@ -14,7 +14,8 @@ Tested on **Linux** (Go 1.23–1.26, including Delve `-gcflags="all=-N -l"` buil
 and on **macOS** with older Go versions. On Go 1.23+ without `checklinkname_off`:
 
 - **Linux** — maps-based scan of the executable RW segment (recommended path)
-- **macOS / Windows / other** — legacy GC-anchored scan (±32 MiB); use
+- **macOS** — in-memory Mach-O load-command scan of writable segments
+- **Windows / other** — legacy GC-anchored scan (±32 MiB); use
   `checklinkname_off` if that is not enough
 
 ## Installation
@@ -85,7 +86,8 @@ The version-specific files do **not** embed scan logic themselves.
 | OS | Files | Strategy |
 |----|-------|----------|
 | **Linux** | `locate_moduledata_linux.go` → `moduledata_maps_linux.go` | `/proc/self/maps` RW-segment scan |
-| **non-Linux** | `locate_moduledata_legacy.go` | scan ±32 MiB around `runtime.GC` |
+| **macOS** | `locate_moduledata_darwin.go` → `macho_image.go` | in-memory Mach-O writable-segment scan |
+| **other** | `locate_moduledata_legacy.go` | scan ±32 MiB around `runtime.GC` |
 
 ### Linux: `/proc/self/maps` RW-segment scan
 
@@ -121,13 +123,15 @@ macOS executables use **Mach-O**, not ELF. A Go binary is usually **Mach-O 64-bi
 | `__DATA_CONST` | read-only globals | `.rodata` |
 | `__DATA` | writable globals | `.data`, `.go.module`, `.noptrdata`, … |
 
-`runtime.firstmoduledata` is still in the **writable non-executable segment after code**, but
-there is **no `/proc/self/maps`**. Memory regions are queried via Mach APIs
-(`mach_vm_region`, `vm_region_recurse_64`) or dyld (`_dyld_get_image_header`, etc.).
+`runtime.firstmoduledata` is still in a **writable non-executable segment after code**, but
+there is **no `/proc/self/maps`**. The Darwin implementation finds the in-memory Mach-O header
+from the `runtime.GC` anchor, parses its `LC_SEGMENT_64` commands, applies the ASLR slide, and
+scans writable non-executable segments. A pcHeader-magic prefilter avoids full validation for
+nearly every pointer-sized slot. It is cgo-free and supports both amd64 and arm64 builds.
 
-**Current status:** no Mach-O maps scanner yet. Non-Linux builds use the **legacy ±32 MiB scan**
-(`locate_moduledata_legacy.go`). If that fails, use `checklinkname_off`, or contribute a
-Mach-O RW-segment walker analogous to the Linux implementation.
+The format parser and ASLR calculations are platform-independent unit tests. The end-to-end
+test in `locate_moduledata_darwin_test.go` must run on a macOS host or CI runner; cross-compiling
+it on Linux verifies both Darwin architectures but cannot execute Mach syscalls.
 
 ### Windows
 
@@ -172,7 +176,8 @@ the foot:
 
 1. **Locate `runtime.firstmoduledata`**
    - With `checklinkname_off`: direct `go:linkname` to the linker symbol.
-   - Otherwise: `locateModuleDataWithoutLinkname` (Linux maps scan or legacy GC scan).
+   - Otherwise: `locateModuleDataWithoutLinkname` (Linux maps scan, Darwin Mach-O scan, or
+     legacy GC scan).
 
 2. **Walk the function table** — same idea as `runtime.FuncForPC`: iterate `moduledata` entries
    until the requested name matches, then read the code pointer.
