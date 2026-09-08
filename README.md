@@ -10,7 +10,7 @@ by name.
 As you might expect, this library is **unsafe** and **fragile** and probably
 shouldn't be used in production. See "Use cases and pitfalls" below.
 
-Tested on **Linux** (Go 1.23–1.26, including Delve `-gcflags="all=-N -l"` builds)
+Tested on **Linux** (Go 1.23–1.27, including Delve `-gcflags="all=-N -l"` builds)
 and on **macOS** with older Go versions. On Go 1.23+ without `checklinkname_off`:
 
 - **Linux** — maps-based scan of the executable RW segment (recommended path)
@@ -46,6 +46,7 @@ GetFunc(&getFunc, "github.com/alangpierce/go-forceexport.GetFunc")
 ```
 
 ## The following Go versions are tested:
+- 1.27.1
 - 1.26.1
 - 1.25
 - 1.23
@@ -65,6 +66,19 @@ If you cannot require those flags on downstream consumers (e.g. a library used b
 others), forceexport falls back to a **runtime scan** to find `runtime.firstmoduledata`
 in memory. The scan strategy is selected by OS at compile time; see
 **Runtime moduledata discovery** below.
+
+### Go 1.27 compatibility
+
+Go 1.27 changes `runtime.moduledata` to store type descriptors and itabs as
+ranges, removing the `typelinks` and `itablinks` slices. The build selects
+`moduledata_go1_27.go` for the new layout and `moduledata_go1_26.go` for Go 1.26;
+both reuse the discovery and function lookup implementation in `go_1_26.go`.
+No additional build flags are required.
+
+Linux and Windows compatibility CI cover default discovery and `checklinkname_off`, with
+both optimized and debug builds. Optimized runs skip `TestContext` because
+`context.withCancel` can be inlined away; debug runs execute the full suite.
+The macOS discovery matrix also includes Go 1.27 on amd64 and arm64.
 
 ## Runtime moduledata discovery (Go 1.23+)
 

@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - dev
+      - master
+  pull_request:
   workflow_dispatch:
 
 permissions:
@@ -28,12 +30,18 @@ jobs:
           - runner: macos-14
             arch: arm64
             go: '1.26'
+          - runner: macos-14
+            arch: arm64
+            go: '1.27'
           - runner: macos-15-intel
             arch: amd64
             go: '1.23'
           - runner: macos-15-intel
             arch: amd64
             go: '1.26'
+          - runner: macos-15-intel
+            arch: amd64
+            go: '1.27'
 
     steps:
       - uses: actions/checkout@v6
@@ -52,3 +60,15 @@ jobs:
 
       - name: Test discovery beyond 32 MiB
         run: go test -v -count=1 -tags=large_discovery_test -run '^TestLargeDarwinModuleDataDiscovery$' .
+
+      - name: Test function lookup and runtime layout
+        run: go test -count=1 -gcflags="all=-N -l" ./...
+
+      - name: Test optimized function lookup and runtime layout
+        run: go test -count=1 -skip '^TestContext$' ./...
+
+      - name: Test optimized linkname lookup and runtime layout
+        run: go test -count=1 -skip '^TestContext$' -tags=checklinkname_off -ldflags=-checklinkname=0 ./...
+
+      - name: Test linkname lookup and runtime layout
+        run: go test -count=1 -gcflags="all=-N -l" -tags=checklinkname_off -ldflags=-checklinkname=0 ./...

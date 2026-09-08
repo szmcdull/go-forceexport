@@ -10,7 +10,8 @@ import (
 	"unsafe"
 )
 
-// Go 1.26+ implementation. runtime.moduledata layout changed (epclntab, bad field order).
+// Shared Go 1.26+ implementation. The version-specific runtime.moduledata
+// layouts live in moduledata_go1_26.go and moduledata_go1_27.go.
 // Types must stay in sync with src/runtime/symtab.go.
 
 type (
@@ -42,53 +43,6 @@ type (
 
 	initTask struct{} // slice element type only; full initTask is internal to runtime
 )
-
-type moduledata struct {
-	pcHeader     *pcHeader
-	funcnametab  []byte
-	cutab        []uint32
-	filetab      []byte
-	pctab        []byte
-	pclntable    []byte
-	ftab         []functab
-	findfunctab  uintptr
-	minpc, maxpc uintptr
-
-	text, etext           uintptr
-	noptrdata, enoptrdata uintptr
-	data, edata           uintptr
-	bss, ebss             uintptr
-	noptrbss, enoptrbss   uintptr
-	covctrs, ecovctrs     uintptr
-	end, gcdata, gcbss    uintptr
-	types, etypes         uintptr
-	rodata                uintptr
-	gofunc                uintptr
-	epclntab              uintptr
-
-	textsectmap []textsect
-	typelinks   []int32
-	itablinks   []*itab
-
-	ptab []ptabEntry
-
-	pluginpath string
-	pkghashes  []modulehash
-
-	inittasks []*initTask
-
-	modulename   string
-	modulehashes []modulehash
-
-	hasmain uint8
-	bad     bool
-
-	gcdatamask, gcbssmask bitvector
-
-	typemap map[typeOff]*_type
-
-	next *moduledata
-}
 
 type functab struct {
 	entryoff uint32

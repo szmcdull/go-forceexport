@@ -1,0 +1,39 @@
+name: Go compatibility
+
+on:
+  push:
+    branches: [dev, master]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  compatibility:
+    name: ${{ matrix.os }} / Go ${{ matrix.go }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+        go: ['1.26', '1.27']
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v7
+        with:
+          go-version: ${{ matrix.go }}
+          cache: false
+      # context.withCancel can be inlined away; test it in the debug builds.
+      - name: Optimized discovery
+        run: go test -count=1 -skip '^TestContext$' ./...
+      - name: Optimized linkname
+        run: go test -count=1 -skip '^TestContext$' -tags=checklinkname_off -ldflags=-checklinkname=0 ./...
+      - name: Debug discovery
+        run: go test -count=1 -gcflags="all=-N -l" ./...
+      - name: Debug linkname
+        run: go test -count=1 -gcflags="all=-N -l" -tags=checklinkname_off -ldflags=-checklinkname=0 ./...
