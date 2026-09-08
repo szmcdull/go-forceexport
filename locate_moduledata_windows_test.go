@@ -11,6 +11,11 @@ import (
 
 func TestFindModuleDataInPEImage(t *testing.T) {
 	pc := reflect.ValueOf(runtime.GC).Pointer()
+	// Linkname lookup bypasses scan initialization. Set the validation anchor
+	// explicitly so this test also works alone and in checklinkname_off builds.
+	previousCodeAddr := codeAddr
+	codeAddr = pc & ^uintptr(0xfff)
+	defer func() { codeAddr = previousCodeAddr }()
 	addr := findModuleDataInPEImage(pc)
 	if addr == 0 {
 		t.Fatal("findModuleDataInPEImage returned 0")
