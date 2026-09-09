@@ -103,11 +103,20 @@ func scanMachOSegmentForModuleData(start, end uintptr, imageRanges []machOImageR
 	}
 	limit := end - moduleSize
 	for addr := start; addr <= limit; addr += step {
-		pcHeaderAddr := *(*uintptr)(unsafe.Pointer(addr))
+		// Use nocheckptr helpers: Go 1.26+ checkptr rejects raw
+		// uintptr-to-pointer arithmetic on Mach-O image memory.
+		pcHeaderAddr, ok := safeReadUintptr(addr)
+		if !ok {
+			continue
+		}
 		if !rangeContains(imageRanges, pcHeaderAddr, step) {
 			continue
 		}
-		magicAndPads := *(*uintptr)(unsafe.Pointer(pcHeaderAddr)) & 0xffffffffffff
+		magic, ok := safeReadUintptr(pcHeaderAddr)
+		if !ok {
+			continue
+		}
+		magicAndPads := magic & 0xffffffffffff
 		if (magicAndPads == 0xFFFFFFF1 || magicAndPads == 0xFFFFFFF0) && isValidModuleData(addr) {
 			return addr
 		}

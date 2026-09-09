@@ -48,6 +48,7 @@ func findModuleDataInPEImage(codeAddr uintptr) uintptr {
 	return 0
 }
 
+//go:nocheckptr
 func executableWritableSections(codeAddr uintptr) (base, imageEnd uintptr, sections []imageSectionRange) {
 	var mbi MEMORY_BASIC_INFORMATION
 	ret, _, _ := procVirtualQuery.Call(codeAddr, uintptr(unsafe.Pointer(&mbi)), unsafe.Sizeof(mbi))
@@ -118,12 +119,22 @@ func scanPESegmentForModuleData(start, end, imageBase, imageEnd uintptr) uintptr
 	addr := (end - step) & ^(step - 1)
 	start = (start + step - 1) & ^(step - 1)
 	for addr >= start {
-		pcHeaderAddr := *(*uintptr)(unsafe.Pointer(addr))
+		pcHeaderAddr, ok := safeReadUintptr(addr)
+		if !ok {
+			if addr < start+step {
+				break
+			}
+			addr -= step
+			continue
+		}
 		if pcHeaderAddr >= imageBase && pcHeaderAddr+8 >= pcHeaderAddr && pcHeaderAddr+8 <= imageEnd {
-			magicAndPads := *(*uintptr)(unsafe.Pointer(pcHeaderAddr)) & 0xffffffffffff
-			if magicAndPads == 0xFFFFFFF1 || magicAndPads == 0xFFFFFFF0 {
-				if isValidModuleData(addr) {
-					return addr
+			magic, ok := safeReadUintptr(pcHeaderAddr)
+			if ok {
+				magicAndPads := magic & 0xffffffffffff
+				if magicAndPads == 0xFFFFFFF1 || magicAndPads == 0xFFFFFFF0 {
+					if isValidModuleData(addr) {
+						return addr
+					}
 				}
 			}
 		}

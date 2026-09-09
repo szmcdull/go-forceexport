@@ -58,6 +58,11 @@ jobs:
       - name: Run Darwin discovery tests
         run: go test -v -count=1 -run 'Test(FindModuleDataInMachOImage|ParseMachO64|LoadedMachOImageRanges)' .
 
+      # Go 1.26+ checkptr is on under -race. The Mach-O scan and init-time
+      # GetFunc must not fatal; this is not a data-race test.
+      - name: Race discovery
+        run: CGO_ENABLED=1 go test -race -count=1 -skip '^TestContext$' ./...
+
       - name: Test discovery beyond 32 MiB
         run: go test -v -count=1 -tags=large_discovery_test -run '^TestLargeDarwinModuleDataDiscovery$' .
 

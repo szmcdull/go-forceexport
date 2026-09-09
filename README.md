@@ -159,6 +159,7 @@ paths in this repo where applicable.
 | `moduledata not found!` | runtime scan failed before any function lookup | Linux: should not happen on recent builds; report a bug. Other OS: try `checklinkname_off` |
 | `Invalid function name: …` | moduledata found, but symbol missing (inlining / dead-code elimination) | call a reference to keep the symbol; build with `-gcflags="all=-l"`; or use `checklinkname_off` |
 | panic in `go-cancelContext` init | same as `moduledata not found!` during `GetFunc` in `init()` | ensure forceexport version with Linux maps scan, or add `checklinkname_off` to debug build flags |
+| `fatal error: checkptr` under `-race` (tests never start) | Go 1.26+ enables stricter unsafe-pointer checks with `-race`; the runtime moduledata scan reads Mach-O / PE / maps memory via `uintptr` | Upgrade forceexport. Temporary verification only: `go test -race -gcflags=all=-d=checkptr=0` (disables checkptr, keeps the race detector) |
 
 ## Use cases and pitfalls
 

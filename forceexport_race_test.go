@@ -4,6 +4,30 @@ package forceexport
 
 import "testing"
 
+// initAddOne is resolved during package init, matching downstream libraries
+// such as go-cancelContext. Go 1.26+ enables checkptr under -race; a fatal
+// here aborts the process before any test function runs.
+var initAddOne func(int) int
+
+func init() {
+	_ = GetFunc(&initAddOne, "github.com/szmcdull/go-forceexport.addOne")
+}
+
+// TestGetFuncDuringInitUnderRace verifies that GetFunc during package init
+// survives checkptr. This is not a data race: -race only enables stricter
+// unsafe-pointer checks. Temporary workaround if an older forceexport is
+// still in use:
+//
+//	go test -race -gcflags=all=-d=checkptr=0
+func TestGetFuncDuringInitUnderRace(t *testing.T) {
+	if initAddOne == nil {
+		t.Fatal("GetFunc during init left initAddOne nil")
+	}
+	if got := initAddOne(2); got != 3 {
+		t.Fatalf("initAddOne(2) = %d, want 3", got)
+	}
+}
+
 // TestModuleDataScanUnderRace verifies that runtime.firstmoduledata memory scan
 // does not fatal under checkptr (-race). Run with:
 //
