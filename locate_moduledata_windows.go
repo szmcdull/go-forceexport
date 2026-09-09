@@ -111,30 +111,23 @@ func executableWritableSections(codeAddr uintptr) (base, imageEnd uintptr, secti
 	return base, imageEnd, sections
 }
 
+//go:nocheckptr
 func scanPESegmentForModuleData(start, end, imageBase, imageEnd uintptr) uintptr {
 	step := uintptr(unsafe.Sizeof(uintptr(0)))
 	if start == 0 || end <= start || end-start < step {
 		return 0
 	}
+	// Do not call safeReadUintptr here: it VirtualQuery-s every slot and
+	// makes a multi-megabyte PE scan take minutes on Windows CI.
 	addr := (end - step) & ^(step - 1)
 	start = (start + step - 1) & ^(step - 1)
 	for addr >= start {
-		pcHeaderAddr, ok := safeReadUintptr(addr)
-		if !ok {
-			if addr < start+step {
-				break
-			}
-			addr -= step
-			continue
-		}
+		pcHeaderAddr := *(*uintptr)(unsafe.Pointer(addr))
 		if pcHeaderAddr >= imageBase && pcHeaderAddr+8 >= pcHeaderAddr && pcHeaderAddr+8 <= imageEnd {
-			magic, ok := safeReadUintptr(pcHeaderAddr)
-			if ok {
-				magicAndPads := magic & 0xffffffffffff
-				if magicAndPads == 0xFFFFFFF1 || magicAndPads == 0xFFFFFFF0 {
-					if isValidModuleData(addr) {
-						return addr
-					}
+			magicAndPads := *(*uintptr)(unsafe.Pointer(pcHeaderAddr)) & 0xffffffffffff
+			if magicAndPads == 0xFFFFFFF1 || magicAndPads == 0xFFFFFFF0 {
+				if isValidModuleData(addr) {
+					return addr
 				}
 			}
 		}
