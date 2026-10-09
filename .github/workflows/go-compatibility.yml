@@ -18,7 +18,8 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        go: ['1.26', '1.27']
+        # 1.23–1.25 share moduledata_go1_23.go. 1.21–1.22 are not in this matrix.
+        go: ['1.23', '1.24', '1.25', '1.26', '1.27']
     defaults:
       run:
         shell: bash

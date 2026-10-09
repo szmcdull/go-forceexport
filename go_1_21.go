@@ -38,59 +38,8 @@ type (
 	}
 )
 
-// moduledata records information about the layout of the executable
-// image. It is written by the linker. Any changes here must be
-// matched changes to the code in cmd/link/internal/ld/symtab.go:symtab.
-// moduledata is stored in statically allocated non-pointer memory;
-// none of the pointers here are visible to the garbage collector.
-type moduledata struct {
-	pcHeader     *pcHeader
-	funcnametab  []byte
-	cutab        []uint32
-	filetab      []byte
-	pctab        []byte
-	pclntable    []byte
-	ftab         []functab
-	findfunctab  uintptr
-	minpc, maxpc uintptr
-
-	text, etext           uintptr
-	noptrdata, enoptrdata uintptr
-	data, edata           uintptr
-	bss, ebss             uintptr
-	noptrbss, enoptrbss   uintptr
-	covctrs, ecovctrs     uintptr
-	end, gcdata, gcbss    uintptr
-	types, etypes         uintptr
-	rodata                uintptr
-	gofunc                uintptr // go.func.*
-
-	textsectmap []textsect
-	typelinks   []int32 // offsets from types
-	itablinks   []*itab
-
-	ptab []ptabEntry
-
-	pluginpath string
-	pkghashes  []modulehash
-
-	// This slice records the initializing tasks that need to be
-	// done to start up the program. It is built by the linker.
-	inittasks []uintptr //[]*initTask
-
-	modulename   string
-	modulehashes []modulehash
-
-	hasmain uint8 // 1 if module contains the main function, 0 otherwise
-
-	gcdatamask, gcbssmask bitvector
-
-	typemap map[typeOff]*_type // offset to *_rtype in previous module
-
-	bad bool // module failed to load and should be ignored
-
-	next *moduledata
-}
+// moduledata layouts live in moduledata_go1_21.go and moduledata_go1_23.go.
+// Go 1.23 moved bad next to hasmain; sharing one struct shifts next by 8 bytes.
 
 type functab struct {
 	entryoff uint32 // relative to runtime.text
