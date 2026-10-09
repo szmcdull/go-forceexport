@@ -7,6 +7,7 @@ import (
 	"reflect"
 	"runtime"
 	"testing"
+	"time"
 )
 
 func TestFindModuleDataInProcessMaps(t *testing.T) {
@@ -34,15 +35,16 @@ func TestFindModuleDataInProcessMaps(t *testing.T) {
 }
 
 func TestFindFuncUsesProcessMaps(t *testing.T) {
-	var runtimeNow func() (int64, int32, int64)
-	if err := GetFunc(&runtimeNow, "time.runtimeNow"); err != nil {
-		t.Fatalf("GetFunc(time.runtimeNow): %v", err)
+	// time.runtimeNow does not exist until Go 1.24. time.Now is present on
+	// every supported version and uses the normal Go calling convention.
+	var now func() time.Time
+	if err := GetFunc(&now, "time.Now"); err != nil {
+		t.Fatalf("GetFunc(time.Now): %v", err)
 	}
-	if runtimeNow == nil {
-		t.Fatal("time.runtimeNow is nil")
+	if now == nil {
+		t.Fatal("time.Now is nil")
 	}
-	sec, nsec, _ := runtimeNow()
-	if sec == 0 || nsec == 0 {
-		t.Fatalf("time.runtimeNow returned zero timestamp: sec=%d nsec=%d", sec, nsec)
+	if got := now(); got.IsZero() {
+		t.Fatal("time.Now returned zero time")
 	}
 }

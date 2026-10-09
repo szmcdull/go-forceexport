@@ -44,20 +44,21 @@ func TestTimeNow(t *testing.T) {
 		return
 	}
 
-	// Fallback to assembly time.now (2 return values)
-	var timeNowFunc func() (int64, int32)
-	err = GetFunc(&timeNowFunc, "time.now")
-	if err == nil && timeNowFunc != nil {
-		sec, nsec := timeNowFunc()
-		if sec == 0 || nsec == 0 {
-			t.Error("Expected nonzero result from time.now().")
+	// Go 1.23 has no time.runtimeNow. Its assembly time.now on Windows is
+	// still the stack ABI, so calling that code pointer as a Go function
+	// reads garbage from registers. time.Now is a normal Go function.
+	var nowFunc func() time.Time
+	err = GetFunc(&nowFunc, "time.Now")
+	if err == nil && nowFunc != nil {
+		got := nowFunc()
+		if got.IsZero() {
+			t.Error("Expected nonzero result from time.Now().")
 		}
-		t.Logf("time.now() returned sec=%d, nsec=%d", sec, nsec)
+		t.Logf("time.Now() returned %s", got)
 		return
 	}
 
-	// If both fail, report the failure
-	t.Fatalf("Failed to get both time.runtimeNow and time.now: %v", err)
+	t.Fatalf("Failed to get both time.runtimeNow and time.Now: %v", err)
 }
 
 // Note that we need to disable inlining here, or else the function won't be
